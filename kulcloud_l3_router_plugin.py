@@ -179,11 +179,6 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         try:
             router_name = router_dict.get("name")
             result = self.__send_create_router(router_name)
-            #result = self.__send_create_router(
-            #                    router_dict['name'], 'openstack',
-            #                    tenant_id=router_dict['tenant_id'],
-            #                    tenant_name=context.tenant_name,
-            #                    id=router_dict['id'] )
             return router_dict
 
         except Exception as e:
@@ -194,6 +189,9 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
 
     def update_router(self, context, id, router):
+        r_dict = super(KulcloudL3RouterPlugins, self).update_router(
+                context, id, router)
+        """
         if "network_id" in router['router']['external_gateway_info']:
             r_dict = super(KulcloudL3RouterPlugin, self).update_router(
                 context, id, router)
@@ -224,7 +222,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             self.__delete_router_interface(id, gw_id)
             r_dict = super(KulcloudL3RouterPlugin, self).update_router(
                 context, id, router)
-
+        """
         return r_dict
 
 
