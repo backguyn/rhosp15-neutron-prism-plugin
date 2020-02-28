@@ -60,10 +60,8 @@ SUCCESS_CODES = list(range(200, 207))
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503, 504, 505]
 
 ROUTER_PATH = "/routers"
-ROUTER_INTERFACE_PATH = "/routers/%s/ports"
-
+ROUTER_INTERFACE_PATH = "/router/interfaces"
 NETWORK_DHCP_PATH = "/networks/dhcp"
-
 FLOATING_PATH = "/flowtable/%s/flow/float"
 
 kul_opts = [
@@ -74,10 +72,13 @@ kul_opts = [
                default=8181,
                help=_("")),
     cfg.StrOpt('base_uri',
-               default='/1.0/openstack',
+               default='/1.1/openstack',
                help=_("")),
     cfg.IntOpt('timeout',
                default=5,
+               help=_("")),
+    cfg.StrOpt('intf_prefix',
+               default='prvlan',
                help=_("")),
 ]
 
@@ -108,6 +109,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         self.nbapi_port = cfg.CONF.nbapi.port
         self.base_uri = cfg.CONF.nbapi.base_uri
         self.time_out = cfg.CONF.nbapi.timeout
+        self.intf_prefix = cfg.CONF.nbapi.intf_prefix
         self.success_codes = SUCCESS_CODES
         self.failure_codes = FAILURE_CODES
 
@@ -159,7 +161,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
     def get_port_name(self, port_id, prefix=None, vlan_id=None):
         DEV_NAME_LEN = 11
-        DEV_NAME_PREFIX = 'pr-'
+        DEV_NAME_PREFIX = 'pr'
 
         if prefix == None:
             prefix = DEV_NAME_PREFIX
@@ -179,6 +181,11 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         try:
             router_name = router_dict.get("name")
             result = self.__send_create_router(router_name)
+            #result = self.__send_create_router(
+            #                    router_dict['name'], 'openstack',
+            #                    tenant_id=router_dict['tenant_id'],
+            #                    tenant_name=context.tenant_name,
+            #                    id=router_dict['id'] )
             return router_dict
 
         except Exception as e:
@@ -189,7 +196,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
 
     def update_router(self, context, id, router):
-        r_dict = super(KulcloudL3RouterPlugins, self).update_router(
+        r_dict = super(KulcloudL3RouterPlugin, self).update_router(
                 context, id, router)
         """
         if "network_id" in router['router']['external_gateway_info']:
@@ -205,10 +212,9 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             ip = ips[0]["ip_address"]
             cidr = _network["subnets"][0]["cidr"]
             vlan_id = network["provider:segmentation_id"]
-            intf_name = "pr-vlan%d" % vlan_id
-            self.__send_add_router_interface(r_dict['gw_port_id'], 
-                                             intf_name, router["router"]["name"],
-                                             ip, cidr, vlan_id)
+            intf_name = "{}{}".format(self.intf_prefix, vlan_id)
+            self.__send_add_router_interface(
+                intf_name, router["router"]["name"], ip, cidr, vlan_id)
             with context.session.begin(subtransactions=True):
                 admin_ctx = context.elevated()
                 port = self._core_plugin._get_port(
@@ -243,8 +249,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         info = super(KulcloudL3RouterPlugin, self).add_router_interface(
                                          context, router_id, interface_info)
         port = self._core_plugin.get_port(context, info['port_id'])
-        _network = self._core_plugin._get_network(context, port['network_id'])
-        network = self._core_plugin.get_network(context, port['network_id'])
+        network = self._core_plugin.get_network(context, info['network_id'])
 
         router_name = self.get_router(context, router_id)['name']
 
@@ -252,29 +257,21 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             self._core_plugin._extend_network_dict_provider(context, network)
 
         vlan_id = network['provider:segmentation_id']
-        intf_name = 'pr-vlan%d' % vlan_id
+        intf_name = "{}{}".format(self.intf_prefix, vlan_id)
         ip = port['fixed_ips'][0]['ip_address']
         cidr = self._core_plugin.get_subnet(context, info['subnet_id'])['cidr']
 
         try:
-            self.__send_add_router_interface(info['port_id'], intf_name, 
+            self.__send_add_router_interface(intf_name, 
                                              router_name,
                                              ip, cidr, vlan_id)
-            with context.session.begin(subtransactions=True):
-                port = self._core_plugin._get_port(context, port['id'])
-                port.update({'status' : 'ACTIVE'})
-                port.update({'name' : intf_name})
-
         except NBAPIException as e:
             LOG.exception("")
             rem_info = {"port_id" : info['port_id']}            
             self.remove_router_interface(context, router_id, rem_info)
             raise e
 
-        self.make_dhcp_process_info(intf_name, ip, cidr, _network,
-                                    _network.tenant_id, 
-                                    router_name)
-
+        LOG.info(info)
         return info
 
 
@@ -288,11 +285,10 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             self._core_plugin._extend_network_dict_provider(context, network)
 
         vlan_id = network['provider:segmentation_id']
-        port_name = "pr-vlan%d" % vlan_id
+        intf_name = "{}{}".format(self.intf_prefix, vlan_id)
         info = super(KulcloudL3RouterPlugin, self).remove_router_interface(
                                          context, router_id, interface_info)
-        self.__delete_router_interface(router_name, port_name)
-        self.__send_kill_dhcp_process(router_name, port_name)
+        self.__delete_router_interface(router_name, intf_name)
 
         return info
 
@@ -345,7 +341,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             old_floating = self.get_floatingip(context, id)
             ip = old_floating['fixed_ip_address']
             floating_ip = old_floating['floating_ip_address']
-            self.__send_disallocate_floatingip(ip, floating_ip)
+            #self.__send_disallocate_floatingip(ip, floating_ip)
 
         result = super(L3RouterPlugin, self).update_floatingip(
             context, id, floatingip)
@@ -353,7 +349,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         if floatingip['floatingip']['port_id'] != None:
             ip = result['fixed_ip_address']
             floating_ip = result['floating_ip_address']
-            self.__send_allocate_floatingip(ip, floating_ip)
+            #self.__send_allocate_floatingip(ip, floating_ip)
 
         return result
 
@@ -372,21 +368,9 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         res = self.rest_call("POST", url, body, None, base_uri="/1.0")
 
 
-    #def __send_create_router(self, name, protocol, **kwargs):
     def __send_create_router(self, name, **kwargs):
         url = ROUTER_PATH
         body = dict(name=name)
-
-        #if 'id' in kwargs:
-        #    body['id'] = kwargs.get('id')
-        #if 'as_id' in kwargs:
-        #    body['as_id'] = kwargs.get('as_id')
-        #if 'router_id' in kwargs:
-        #    body['router_id'] = kwargs.get('router_id')
-        #if 'tenant_id' in kwargs:
-        #    body['tenant_id'] = kwargs.get('tenant_id')
-        #if 'tenant_name' in kwargs:
-        #    body['tenant_name'] = kwargs.get('tenant_name')
 
         res = self.rest_call("POST", url, body, None)
 
@@ -397,32 +381,36 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
 
     def __send_delete_router(self, name):
-        url = ROUTER_PATH + "/%s" % name
+        url = "/".join((ROUTER_PATH, name))
 
         res = self.rest_call("DELETE", url, None, None)
         if res[0] not in SUCCESS_CODES:
             raise NBAPIException(msg=res[2])
 
 
-    def __send_add_router_interface(self, id, intf_name, 
+    def __send_add_router_interface(self, intf_name, 
                                     router_name, ip, cidr, segment_id=None):
-        url = ROUTER_PATH + "/%s/ports" % router_name
+        url = ROUTER_INTERFACE_PATH
+        cidr_int = cidr.split('/')[-1]
+        body = dict(
+            tenant_name=router_name,
+            intf_name=intf_name,
+            vlan_id=segment_id,
+            ip_address="{}/{}".format(ip, cidr_int)
+        )
+        LOG.info("Send add router intf API to NBAPI server {}:{}".format(
+                    self.nbapi_server, self.nbapi_port))
+        LOG.info("Body: {}".format(body))
         
-        body = dict(interfaces=list())
-        body["interfaces"].append(dict(id = id,
-                                       intf_name = intf_name,
-                                       ip_address = ip,
-                                       network_cidr = cidr,
-                                       vlan_id = segment_id,
-                                       type = 'openstack'))
         res = self.rest_call("POST", url, body, None)
         if res[0] not in SUCCESS_CODES:
             raise NBAPIException(msg=res[2])
         return res
 
 
-    def __delete_router_interface(self, router_id, port_id):
-        url = ROUTER_PATH + "/%s/ports/%s" % (router_id, port_id)
+    def __delete_router_interface(self, router_name, intf_name):
+        url = "{}/{}?tenant_name={}".format(
+                ROUTER_INTERFACE_PATH, intf_name, router_name)
         res = self.rest_call("DELETE", url, None, None)
         if res[0] == 0:
             raise NBAPIException(msg=res[2])
