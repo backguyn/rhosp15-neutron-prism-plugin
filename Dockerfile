@@ -6,8 +6,8 @@ MAINTAINER kulcloud <backguyn.jung@kulcloud.net>
 LABEL name="rhosp15/openstack-neutron-server-prism" \
       maintainer="backguyn.jung@kulcloud.net" \
       vendor="kulcloud" \
-      version="1.0" \
-      release="1.0" \
+      version="1.1" \
+      release="1.1" \
       summary="Red Hat OpenStack Platform 15.0 neutron-server PRISM plugin" \
       description="Red Hat OpenStack Platform 15.0 neutron-server PRISM plugin"
 
