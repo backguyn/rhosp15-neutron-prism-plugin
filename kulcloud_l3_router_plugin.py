@@ -45,26 +45,26 @@ def __import_log_version_juno():
 
 def import_log():
     log = __import_log_version_kilo()
-    if log != None:
-        return log
+    if log == None:
+        log = __import_log_version_juno()
+        if log == None:
+            raise ImportError("Log Class cannot be found")
 
-    log = __import_log_version_juno()
-    if log != None:
-        return log
-    else:
-        raise ImportError("Log Class cannot be found")
+    return log
+
 
 LOG = import_log().getLogger(__name__)
 
 SUCCESS_CODES = list(range(200, 207))
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503, 504, 505]
 
+ROUTER_NAME_MAX_LENGTH = 11
 ROUTER_PATH = "/routers"
 ROUTER_INTERFACE_PATH = "/router/interfaces"
 NETWORK_DHCP_PATH = "/networks/dhcp"
 FLOATING_PATH = "/flowtable/%s/flow/float"
 
-kul_opts = [
+KUL_OPTS = [
     cfg.StrOpt('server',
                default="localhost",
                help=_("")),
@@ -82,7 +82,7 @@ kul_opts = [
                help=_("")),
 ]
 
-cfg.CONF.register_opts(kul_opts, "nbapi")
+cfg.CONF.register_opts(KUL_OPTS, "nbapi")
 
 
 class NBAPIException(exceptions.NeutronException):
@@ -114,7 +114,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         self.failure_codes = FAILURE_CODES
 
 
-    def rest_call(self, action, url, data, headers, 
+    def rest_call(self, action, url, data, headers,
                   https=False, base_uri=None):
         if base_uri == None:
             base_uri = self.base_uri
@@ -127,12 +127,12 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
         if https is False:
             conn = http.client.HTTPConnection(
-                    self.nbapi_server, 
-                    port=self.nbapi_port, timeout=self.time_out)
+                self.nbapi_server, port=self.nbapi_port,
+                timeout=self.time_out)
         else:
             conn = http.client.HTTPSConnection(
-                    self.nbapi_server, 
-                    port=self.nbapi_port, timeout=self.time_out)
+                self.nbapi_server, port=self.nbapi_port,
+                timeout=self.time_out)
 
         if conn is None:
             #return 0, None, None, None
@@ -151,7 +151,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             ret = (response.status, response.reason, respstr, respdata)
         except (socket.timeout, socket.error) as e:
             LOG.error(_('RESTCALL: %(action)s failure, %(e)r'),
-                        {'action' : action, 'e' : e})
+                      {'action' : action, 'e' : e})
             #ret = 0, None, None, None
             raise NBAPIException(msg="Not connected to NBAPI server")
         finally:
@@ -159,28 +159,16 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
         return ret
 
-    def get_port_name(self, port_id, prefix=None, vlan_id=None):
-        DEV_NAME_LEN = 11
-        DEV_NAME_PREFIX = 'pr'
-
-        if prefix == None:
-            prefix = DEV_NAME_PREFIX
-
-        if vlan_id == None:
-            port_name = (prefix + port_id)[:DEV_NAME_LEN]
-        else:
-            port_name = (prefix + port_id)[:DEV_NAME_LEN] + '.' + str(vlan_id)
-
-        return port_name
-
 
     def create_router(self, context, router):
-        # TODO: You must resolve the name duplication problem.
         router_dict = super(KulcloudL3RouterPlugin, self).create_router(
             context, router)
         try:
             router_name = router_dict.get("name")
-            result = self.__send_create_router(router_name)
+            router_id = router_dict.get("id")
+            remake_router_name = self.__remake_router_name(
+                router_name, router_id)
+            result = self.__send_create_router(remake_router_name)
             #result = self.__send_create_router(
             #                    router_dict['name'], 'openstack',
             #                    tenant_id=router_dict['tenant_id'],
@@ -197,7 +185,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
     def update_router(self, context, id, router):
         r_dict = super(KulcloudL3RouterPlugin, self).update_router(
-                context, id, router)
+            context, id, router)
         """
         if "network_id" in router['router']['external_gateway_info']:
             r_dict = super(KulcloudL3RouterPlugin, self).update_router(
@@ -233,13 +221,15 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
 
     def delete_router(self, context, router_id):
-        router = super(KulcloudL3RouterPlugin, self).get_router(context,
-            router_id, 'name')
+        router = super(KulcloudL3RouterPlugin, self).get_router(
+            context, router_id, 'name')
         super(KulcloudL3RouterPlugin, self).delete_router(context, router_id)
 
         try:
             router_name = router.get("name")
-            self.__send_delete_router(router_name)
+            remake_router_name = self.__remake_router_name(
+                router_name, router_id)
+            self.__send_delete_router(remake_router_name)
         except Exception as e:
             LOG.exception(" ")
             raise e
@@ -247,11 +237,13 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
     def add_router_interface(self, context, router_id, interface_info):
         info = super(KulcloudL3RouterPlugin, self).add_router_interface(
-                                         context, router_id, interface_info)
+            context, router_id, interface_info)
         port = self._core_plugin.get_port(context, info['port_id'])
         network = self._core_plugin.get_network(context, info['network_id'])
 
         router_name = self.get_router(context, router_id)['name']
+        remake_router_name = self.__remake_router_name(
+            router_name, router_id)
 
         if 'provider:segmentation_id' not in network:
             self._core_plugin._extend_network_dict_provider(context, network)
@@ -262,12 +254,11 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         cidr = self._core_plugin.get_subnet(context, info['subnet_id'])['cidr']
 
         try:
-            self.__send_add_router_interface(intf_name, 
-                                             router_name,
-                                             ip, cidr, vlan_id)
+            self.__send_add_router_interface(
+                intf_name, remake_router_name, ip, cidr, vlan_id)
         except NBAPIException as e:
             LOG.exception("")
-            rem_info = {"port_id" : info['port_id']}            
+            rem_info = {"port_id" : info['port_id']}
             self.remove_router_interface(context, router_id, rem_info)
             raise e
 
@@ -277,8 +268,9 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
     def remove_router_interface(self, context, router_id, interface_info):
         router_name = self.get_router(context, router_id)['name']
-        network_id = self._core_plugin.get_port(context,
-                                        interface_info['port_id'])['network_id']
+        remake_router_name = self.__remake_router_name(router_name, router_id)
+        network_id = self._core_plugin.get_port(
+            context, interface_info['port_id'])['network_id']
         network = self._core_plugin.get_network(context, network_id)
 
         if 'provider:segmentation_id' not in network:
@@ -287,22 +279,20 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         vlan_id = network['provider:segmentation_id']
         intf_name = "{}{}".format(self.intf_prefix, vlan_id)
         info = super(KulcloudL3RouterPlugin, self).remove_router_interface(
-                                         context, router_id, interface_info)
-        self.__delete_router_interface(router_name, intf_name)
+            context, router_id, interface_info)
+        self.__delete_router_interface(remake_router_name, intf_name)
 
         return info
 
 
     def make_dhcp_process_info(self, intf_name, ip, cidr, network,
-                                     tenant_id=None, router_name=None):
+                               tenant_id=None, router_name=None):
         hosts_info = self.__make_hosts_info(network)
         addn_hosts_info = self.__make_addn_hosts_info(network)
         opts_info = self.__make_dhcp_opts_info(network)
-        self.__send_run_dhcp_process(intf_name, ip, cidr,
-                                     hosts_info, addn_hosts_info, 
-                                     opts_info,
-                                     tenant_id=tenant_id,
-                                     router_name=router_name)
+        self.__send_run_dhcp_process(
+            intf_name, ip, cidr, hosts_info, addn_hosts_info,
+            opts_info, tenant_id=tenant_id, router_name=router_name)
 
 
     def create_floatingip(self, context, floatingip):
@@ -317,16 +307,16 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         IP object will be DOWN.
 
         result form is like below :
-        {'floating_network_id': u'21630e38-c683-4219-89c9-9a3a7a9f8ab4', 
-         'router_id': None, 
-         'fixed_ip_address': None, 
-         'floating_ip_address': u'172.24.4.5', 
-         'tenant_id': u'b7b5b6be923d464481d5a08beaf31b96', 
-         'status': 'DOWN', 
-         'port_id': None, 
+        {'floating_network_id': u'21630e38-c683-4219-89c9-9a3a7a9f8ab4',
+         'router_id': None,
+         'fixed_ip_address': None,
+         'floating_ip_address': u'172.24.4.5',
+         'tenant_id': u'b7b5b6be923d464481d5a08beaf31b96',
+         'status': 'DOWN',
+         'port_id': None,
          'id': '44242860-8fa9-4728-af87-e8cc86a2422c'}
         """
-        result = super(L3RouterPlugin, self).create_floatingip(
+        result = super(KulcloudL3RouterPlugin, self).create_floatingip(
             context, floatingip,
             initial_status=constants.FLOATINGIP_STATUS_DOWN)
 
@@ -343,7 +333,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             floating_ip = old_floating['floating_ip_address']
             #self.__send_disallocate_floatingip(ip, floating_ip)
 
-        result = super(L3RouterPlugin, self).update_floatingip(
+        result = super(KulcloudL3RouterPlugin, self).update_floatingip(
             context, id, floatingip)
 
         if floatingip['floatingip']['port_id'] != None:
@@ -356,15 +346,15 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
     def __send_disallocate_floatingip(self, ip, floating_ip):
         url = FLOATING_PATH % "prism"
-        body = dict(fixed_ip_address = ip,
-                    floating_ip_address = floating_ip)
+        body = dict(fixed_ip_address=ip,
+                    floating_ip_address=floating_ip)
         res = self.rest_call("DELETE", url, body, None, base_uri="/1.0")
 
 
     def __send_allocate_floatingip(self, ip, floating_ip):
         url = FLOATING_PATH % "prism"
-        body = dict(fixed_ip_address = ip,
-                    floating_ip_address = floating_ip)
+        body = dict(fixed_ip_address=ip,
+                    floating_ip_address=floating_ip)
         res = self.rest_call("POST", url, body, None, base_uri="/1.0")
 
 
@@ -388,7 +378,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             raise NBAPIException(msg=res[2])
 
 
-    def __send_add_router_interface(self, intf_name, 
+    def __send_add_router_interface(self, intf_name,
                                     router_name, ip, cidr, segment_id=None):
         url = ROUTER_INTERFACE_PATH
         cidr_int = cidr.split('/')[-1]
@@ -399,9 +389,9 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             ip_address="{}/{}".format(ip, cidr_int)
         )
         LOG.info("Send add router intf API to NBAPI server {}:{}".format(
-                    self.nbapi_server, self.nbapi_port))
+            self.nbapi_server, self.nbapi_port))
         LOG.info("Body: {}".format(body))
-        
+
         res = self.rest_call("POST", url, body, None)
         if res[0] not in SUCCESS_CODES:
             raise NBAPIException(msg=res[2])
@@ -410,7 +400,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
     def __delete_router_interface(self, router_name, intf_name):
         url = "{}/{}?tenant_name={}".format(
-                ROUTER_INTERFACE_PATH, intf_name, router_name)
+            ROUTER_INTERFACE_PATH, intf_name, router_name)
         res = self.rest_call("DELETE", url, None, None)
         if res[0] == 0:
             raise NBAPIException(msg=res[2])
@@ -422,14 +412,14 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
                                 hosts=None, addn_hosts=None, opts=None,
                                 tenant_id=None, router_name=None):
         url = NETWORK_DHCP_PATH
-        body = dict( intf_name = intf_name,
-                     ip_address = ip,
-                     network_cidr = cidr,
-                     hosts = hosts,
-                     addn_hosts = addn_hosts,
-                     opts = opts,
-                     tenant_id = tenant_id,
-                     router_name = router_name )
+        body = dict(intf_name=intf_name,
+                    ip_address=ip,
+                    network_cidr=cidr,
+                    hosts=hosts,
+                    addn_hosts=addn_hosts,
+                    opts=opts,
+                    tenant_id=tenant_id,
+                    router_name=router_name)
         res = self.rest_call("POST", url, body, None)
         if res[0] == 0:
             raise NBAPIException(msg=res[2])
@@ -464,26 +454,26 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         for (port, alloc, hostname, name) in self.__iter_hosts(network):
             if getattr(port, 'extra_dhcp_opts', False):
                 # Don't check version
-                result.append( dict( mac_address = port.mac_address,
-                                     name = name,
-                                     ip_address = alloc.ip_address,
-                                     set_tag = 'set:',
-                                     port_id = port.id) )
+                result.append(dict(mac_address=port.mac_address,
+                                   name=name,
+                                   ip_address=alloc.ip_address,
+                                   set_tag='set:',
+                                   port_id=port.id))
             else:
-                result.append( dict( mac_address = port.mac_address,
-                                     name = name,
-                                     ip_address = alloc.ip_address) )
+                result.append(dict(mac_address=port.mac_address,
+                                   name=name,
+                                   ip_address=alloc.ip_address))
 
-        return result 
+        return result
 
-    
+
     def __make_addn_hosts_info(self, network):
         result = []
 
         for (port, alloc, hostname, name) in self.__iter_hosts(network):
-            result.append( dict( ip_address = alloc.ip_address,
-                                 name = name,
-                                 hostname = hostname ) )
+            result.append(dict(ip_address=alloc.ip_address,
+                               name=name,
+                               hostname=hostname))
 
         return result
 
@@ -537,7 +527,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
                             gateway = hr.nexthop
                     else:
                         host_routes.append("%s,%s" % (hr.destination, hr.nexthop))
-    
+
             # Ignore enable_isolated_metadata opt
             """
             if (isolated_subnets[subnet.id] and
@@ -589,7 +579,6 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         return options
 
     def _update_dhcp_info(self, intf_name, network, hosts_ip=None):
-        
 
         if network:
             hosts_info = self.__make_hosts_info(network)
@@ -609,18 +598,18 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
                                      opts_info,
                                      hosts_ip=hosts_ip)
 
-  
-    def __send_update_dhcp_info(self, intf_name, cidr, 
-                                      hosts, addn_hosts, opts,
-                                      hosts_ip=None):
+
+    def __send_update_dhcp_info(self, intf_name, cidr,
+                                hosts, addn_hosts, opts,
+                                hosts_ip=None):
         if intf_name == None:
             inft_name = "None"
 
         url = "/networks/dhcp/%s" % intf_name
-        body = dict( hosts = hosts,
-                     network_cidr = cidr,
-                     addn_hosts = addn_hosts,
-                     opts = opts )
+        body = dict(hosts=hosts,
+                    network_cidr=cidr,
+                    addn_hosts=addn_hosts,
+                    opts=opts)
         if hosts_ip:
             body['host_ips'] = hosts_ip
 
@@ -629,4 +618,11 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
             raise RuntimeError(res)
 
         return res
-  
+
+
+    def __remake_router_name(self, router_name, router_id):
+        remake_router_name = router_name
+        if len(router_name) > ROUTER_NAME_MAX_LENGTH:
+            remake_router_name = router_id[:ROUTER_NAME_MAX_LENGTH]
+
+        return remake_router_name
