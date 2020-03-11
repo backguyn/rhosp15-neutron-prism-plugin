@@ -1,0 +1,22 @@
+[console_scripts]
+networking-ovn-metadata-agent = networking_ovn.cmd.eventlet.agents.metadata:main
+networking-ovn-migration-mtu = networking_ovn.cmd.migration_mtu:main
+neutron-ovn-db-sync-util = networking_ovn.cmd.neutron_ovn_db_sync_util:main
+
+[neutron.db.alembic_migrations]
+networking-ovn = networking_ovn.db.migration:alembic_migrations
+
+[neutron.ml2.mechanism_drivers]
+ovn = networking_ovn.ml2.mech_driver:OVNMechanismDriver
+ovn-sync = networking_ovn.cmd.neutron_ovn_db_sync_util:OVNMechanismDriver
+
+[neutron.service_plugins]
+ovn-router = networking_ovn.l3.l3_ovn:OVNL3RouterPlugin
+kulcloud-ovn-router = networking_ovn.l3.kulcloud_l3_ovn:KulcloudOVNL3RouterPlugin
+
+[octavia.api.drivers]
+ovn = networking_ovn.octavia.ovn_driver:OvnProviderDriver
+
+[oslo.config.opts]
+networking_ovn = networking_ovn.common.config:list_opts
+networking_ovn.metadata.agent = networking_ovn.conf.agent.metadata.config:list_metadata_agent_opts
