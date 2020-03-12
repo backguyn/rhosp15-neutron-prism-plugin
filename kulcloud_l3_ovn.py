@@ -22,6 +22,7 @@ import http.client
 import socket
 
 from oslo_log import log
+from oslo_config import cfg
 from neutron_lib import exceptions
 
 from networking_ovn.l3.l3_ovn import OVNL3RouterPlugin
