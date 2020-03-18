@@ -317,8 +317,7 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
          'id': '44242860-8fa9-4728-af87-e8cc86a2422c'}
         """
         result = super(KulcloudL3RouterPlugin, self).create_floatingip(
-            context, floatingip,
-            initial_status=constants.FLOATINGIP_STATUS_DOWN)
+            context, floatingip)
 
         return result
 
@@ -327,19 +326,23 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
         ip = None
         floating_ip = None
 
+        """
         if floatingip['floatingip']['port_id'] == None:
             old_floating = self.get_floatingip(context, id)
             ip = old_floating['fixed_ip_address']
             floating_ip = old_floating['floating_ip_address']
             #self.__send_disallocate_floatingip(ip, floating_ip)
+        """
 
         result = super(KulcloudL3RouterPlugin, self).update_floatingip(
             context, id, floatingip)
 
+        """
         if floatingip['floatingip']['port_id'] != None:
             ip = result['fixed_ip_address']
             floating_ip = result['floating_ip_address']
             #self.__send_allocate_floatingip(ip, floating_ip)
+        """
 
         return result
 
@@ -375,7 +378,9 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
         res = self.rest_call("DELETE", url, None, None)
         if res[0] not in SUCCESS_CODES:
-            raise NBAPIException(msg=res[2])
+            msg = res[2]
+            if not msg.startswith(b'{"error": "Not found tenant'):
+                raise NBAPIException(msg=res[2])
 
 
     def __send_add_router_interface(self, intf_name,
@@ -621,8 +626,5 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
 
 
     def __remake_router_name(self, router_name, router_id):
-        remake_router_name = router_name
-        if len(router_name) > ROUTER_NAME_MAX_LENGTH:
-            remake_router_name = router_id[:ROUTER_NAME_MAX_LENGTH]
-
+        remake_router_name = router_id[:ROUTER_NAME_MAX_LENGTH].replace('-', '')
         return remake_router_name
