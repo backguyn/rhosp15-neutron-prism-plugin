@@ -269,18 +269,23 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
     def remove_router_interface(self, context, router_id, interface_info):
         router_name = self.get_router(context, router_id)['name']
         remake_router_name = self.__remake_router_name(router_name, router_id)
-        network_id = self._core_plugin.get_port(
-            context, interface_info['port_id'])['network_id']
-        network = self._core_plugin.get_network(context, network_id)
+        if interface_info.get("port_id"):
+            network_id = self._core_plugin.get_port(
+                context, interface_info['port_id'])['network_id']
+            network = self._core_plugin.get_network(context, network_id)
 
-        if 'provider:segmentation_id' not in network:
-            self._core_plugin._extend_network_dict_provider(context, network)
+            if 'provider:segmentation_id' not in network:
+                self._core_plugin._extend_network_dict_provider(
+                    context, network)
 
-        vlan_id = network['provider:segmentation_id']
-        intf_name = "{}{}".format(self.intf_prefix, vlan_id)
+            vlan_id = network['provider:segmentation_id']
+            intf_name = "{}{}".format(self.intf_prefix, vlan_id)
+
         info = super(KulcloudL3RouterPlugin, self).remove_router_interface(
             context, router_id, interface_info)
-        self.__delete_router_interface(remake_router_name, intf_name)
+
+        if interface_info.get("port_id"):
+            self.__delete_router_interface(remake_router_name, intf_name)
 
         return info
 
