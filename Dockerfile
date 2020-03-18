@@ -14,7 +14,7 @@ LABEL name="rhosp15/openstack-neutron-server-prism" \
 USER "root"
 
 COPY kulcloud_plugin.py /usr/lib/python3.6/site-packages/neutron/plugins/ml2/
-COPY kulcloud_l3_router_plugin /usr/lib/python3.6/site-packages/neutron/services/l3_router/
+COPY kulcloud_l3_router_plugin.py /usr/lib/python3.6/site-packages/neutron/services/l3_router/
 COPY ml2_nbapi_conf.txt /tmp
 RUN cat /tmp/ml2_nbapi_conf.txt >> /etc/neutron/plugins/ml2/ml2_conf.ini
 
