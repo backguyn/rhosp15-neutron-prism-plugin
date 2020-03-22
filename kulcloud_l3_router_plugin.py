@@ -79,6 +79,9 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
     All DB related work is implemented in classes
     l3_db.L3_NAT_db_mixin and extraroute_db.ExtraRoute_db_mixin.
     """
+
+    __filter_validation_support = True
+
     def __init__(self):
         super(KulcloudL3RouterPlugin, self).__init__()
         self.nbapi_server = cfg.CONF.nbapi.server
