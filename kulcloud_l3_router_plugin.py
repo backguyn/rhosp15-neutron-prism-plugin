@@ -15,8 +15,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
-# For Openstack neutron ML2 plugin (version: liberty)
-# no l3-agent
+# For Openstack neutron ML2 plugin (version: stein)
 
 import sys
 import json
@@ -24,36 +23,13 @@ import http.client
 import socket
 
 from oslo_config import cfg
+from oslo_log import log
 
 from neutron.services.l3_router.l3_router_plugin import L3RouterPlugin
 from neutron.common import constants
 from neutron_lib import exceptions
 
-def __import_log_version_kilo():
-    try:
-        __import__("oslo_log")
-        return getattr(sys.modules["oslo_log"], "log")
-    except (ValueError, AttributeError):
-        return None
-
-def __import_log_version_juno():
-    try:
-        __import__("neutron.openstack.common")
-        return getattr(sys.modules["neutron.openstack.common"], "log")
-    except (ValueError, AttributeError):
-        return None
-
-def import_log():
-    log = __import_log_version_kilo()
-    if log == None:
-        log = __import_log_version_juno()
-        if log == None:
-            raise ImportError("Log Class cannot be found")
-
-    return log
-
-
-LOG = import_log().getLogger(__name__)
+LOG = log.getLogger(__name__)
 
 SUCCESS_CODES = list(range(200, 207))
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503, 504, 505]
