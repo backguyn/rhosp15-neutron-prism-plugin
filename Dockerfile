@@ -17,6 +17,7 @@ COPY kulcloud_plugin.py /usr/lib/python3.6/site-packages/neutron/plugins/ml2/
 COPY kulcloud_l3_router_plugin.py /usr/lib/python3.6/site-packages/neutron/services/l3_router/
 COPY ml2_nbapi_conf.txt /tmp
 RUN cat /tmp/ml2_nbapi_conf.txt >> /etc/neutron/plugins/ml2/ml2_conf.ini
+COPY entry_points.txt /usr/lib/python3.6/site-packages/neutron-14.0.5.dev40-py3.6.egg-info/entry_points.txt
 
 RUN mkdir /licenses
 COPY licensing.txt /licenses
