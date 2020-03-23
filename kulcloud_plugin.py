@@ -18,6 +18,7 @@
 import sys
 
 from oslo_config import cfg
+from oslo_log import log
 from neutron_lib.plugins import constants as plugin_constants
 from neutron_lib.plugins import directory
 from neutron.common import config
@@ -27,34 +28,14 @@ from neutron.plugins.common import constants as service_constants
 from novaclient.v2 import client as nova_client
 from novaclient import exceptions
 
-def __import_log_version_kilo():
-    try:
-        __import__("oslo_log")
-        return getattr(sys.modules["oslo_log"], "log")
-    except (ValueError, AttributeError):
-        return None
-
-def __import_log_version_juno():
-    try:
-        __import__("neutron.openstack.common")
-        return getattr(sys.modules["neutron.openstack.common"], "log")
-    except (ValueError, AttributeError):
-        return None
-
-def import_log():
-    log = __import_log_version_kilo()
-    if log != None:
-        return log
-
-    log = __import_log_version_juno()
-    if log != None:
-        return log
-    else:
-        raise ImportError("Log Class cannot be found")
-
-LOG = import_log().getLogger(__name__)
+LOG = log.getLogger(__name__)
 
 class KulcloudMl2Plugin(Ml2Plugin):
+
+    __native_bulk_support = True
+    __native_pagination_support = True
+    __native_sorting_support = True
+    __filter_validation_support = True
 
     def create_port(self, context, port):
         res = super(KulcloudMl2Plugin, self).create_port(context, port)

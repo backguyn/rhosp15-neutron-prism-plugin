@@ -80,6 +80,8 @@ class KulcloudL3RouterPlugin(L3RouterPlugin):
     l3_db.L3_NAT_db_mixin and extraroute_db.ExtraRoute_db_mixin.
     """
 
+    __native_pagination_support = True
+    __native_sorting_support = True
     __filter_validation_support = True
 
     def __init__(self):
