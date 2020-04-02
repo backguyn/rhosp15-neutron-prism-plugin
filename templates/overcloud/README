@@ -1,0 +1,11 @@
+
+file path:
+/home/{user}/templates/containers-prepare-parameter.yaml
+/home/{user}/templates/custom-nics/*
+/home/{user}/templates/network-environment.yaml
+/home/{user}/templates/node-info.yaml
+/home/{user}/openstack-tripleo-heat-templates-rendered/*
+/home/{user}/templates/overcloud_images1.2.yaml
+
+and plz modify ocontainers-prepare-parameter.yaml & overcloud_images1.2.yaml:
+you have to add user and password to ContainerImageRegistryCredentials parameter

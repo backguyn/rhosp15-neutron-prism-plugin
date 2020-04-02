@@ -1,0 +1,11 @@
+
+resource_registry:
+  OS::TripleO::NodeUserData: /home/stack/openstack-tripleo-heat-templates-rendered/firstboot/userdata_root_password.yaml
+
+parameter_defaults:
+  ControllerCount: 1
+  ComputeCount: 1
+  DefaultHorizonSecret: "kulcloud&&"
+  NodeRootPassword: "kulcloud&&"
+  #CephStorageCount: 1
+

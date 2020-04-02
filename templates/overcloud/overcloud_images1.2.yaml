@@ -1,0 +1,16 @@
+# Generated with the following on 2020-02-24T16:39:42.103801
+#
+#   openstack tripleo container image prepare -e templates/containers-prepare-parameter.yaml --output-env-file /home/stack/templates/overcloud_images1.1.yaml
+#
+
+parameter_defaults:
+  ContainerImageRegistryLogin: true
+  ContainerImageRegistryCredentials:
+    registry.redhat.io:
+      #account: password 
+    registry.connect.redhat.com:
+      #account: password
+  DockerInsecureRegistryAddress:
+  - 192.168.194.1:8787
+  DockerNeutronApiImage: registry.connect.redhat.com/kulcloud/rhosp15-openstack-neutron-server-prism-plugin
+  DockerNeutronConfigImage: registry.connect.redhat.com/kulcloud/rhosp15-openstack-neutron-server-prism-plugin

@@ -1,0 +1,42 @@
+# A Heat environment file that enables DVR in the overcloud. Used with Compute
+# DVR role. Note that the network configuration is consistent with the default
+# tripleo network templates so some customization is likely required for
+# production deployments.
+resource_registry:
+  # Default Neutron ML2 puppet plugin to use when NeutronCorePlugin is set to ML2
+  # FIXME(bogdando): can not be switched yet due to puppet-base issues
+  # see https://review.openstack.org/#/c/563443
+  OS::TripleO::Docker::NeutronMl2PluginBase: ../../puppet/services/neutron-plugin-ml2.yaml
+
+  OS::TripleO::Services::NeutronServer: ../../deployment/neutron/neutron-api-container-puppet.yaml
+  OS::TripleO::Services::NeutronApi: ../../deployment/neutron/neutron-api-container-puppet.yaml
+  OS::TripleO::Services::NeutronCorePlugin: ../../deployment/neutron/neutron-plugin-ml2-container-puppet.yaml
+  OS::TripleO::Services::NeutronMetadataAgent: ../../deployment/neutron/neutron-metadata-container-puppet.yaml
+  OS::TripleO::Services::NeutronOvsAgent: ../../deployment/neutron/neutron-ovs-agent-container-puppet.yaml
+  OS::TripleO::Services::NeutronDhcpAgent: ../../deployment/neutron/neutron-dhcp-container-puppet.yaml
+  OS::TripleO::Services::ComputeNeutronOvsAgent: ../../deployment/neutron/neutron-ovs-agent-container-puppet.yaml
+  OS::TripleO::Services::NeutronL3Agent: ../../deployment/neutron/neutron-l3-container-puppet.yaml
+
+  # Disable OVN services
+  OS::TripleO::Services::OVNController: OS::Heat::None
+  OS::TripleO::Services::OVNDBs: OS::Heat::None
+  OS::TripleO::Services::OVNMetadataAgent: OS::Heat::None
+
+parameter_defaults:
+
+  NeutronMechanismDrivers: ['openvswitch']
+
+  NeutronTypeDrivers: 'vxlan,vlan,flat,gre'
+  NeutronNetworkType: 'vxlan'
+  NeutronServicePlugins: 'neutron.services.l3_router.kulcloud_l3_router_plugin.KulcloudL3RouterPlugin,qos,segments,trunk,port_forwarding'
+  NeutronCorePlugin: 'neutron.plugins.ml2.kulcloud_plugin.KulcloudMl2Plugin'
+  NeutronVniRanges: ['1:4094', ]
+  KernelIpNonLocalBind: 0
+  NeutronPluginExtensions: "qos,port_security,dns,port_forwarding,dns_domain_ports,uplink_status_propagation"
+  NeutronEnableDVR: false
+
+  ControllerExtraConfig:
+    neutron::agents::l3::extensions: "fip_qos,port_forwarding"
+    neutron::config::server_config:
+      default/external_dns_driver:
+        value: "designate"

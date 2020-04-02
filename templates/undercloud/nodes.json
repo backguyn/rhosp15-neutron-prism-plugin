@@ -1,0 +1,22 @@
+
+{
+    "nodes":[
+        {
+            "name" : "controller",
+            "arch" : "x86_64",
+            "pm_type" : "ipmi",
+            "pm_user" : "kulcloud",
+            "pm_password" : "kulcloud",
+            "pm_addr" : "192.168.194.3"
+        },
+        {
+            "name" : "compute",
+            "arch" : "x86_64",
+            "pm_type" : "ipmi",
+            "pm_user" : "kulcloud",
+            "pm_password" : "kulcloud",
+            "pm_addr" : "192.168.194.4"
+        }
+    ]
+}
+

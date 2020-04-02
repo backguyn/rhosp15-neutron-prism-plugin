@@ -1,0 +1,38 @@
+# Generated with the following on 2020-01-10T11:39:49.240436
+#
+#   openstack tripleo container image prepare default --local-push-destination --output-env-file containers-prepare-parameter.yaml
+#
+
+parameter_defaults:
+  ContainerImageRegistryLogin: true
+  ContainerImageRegistryCredentials:
+    registry.redhat.io:
+      #admin: password
+  ContainerImagePrepare:
+  - push_destination: true
+    set:
+      ceph_image: rhceph-4-rhel8
+      ceph_namespace: registry.redhat.io/rhceph-beta
+      ceph_tag: latest
+      name_prefix: openstack-
+      name_suffix: ''
+      namespace: registry.redhat.io/rhosp15-rhel8
+      neutron_driver: null
+      tag: 15.0
+    tag_from_label: '{version}-{release}'
+    #includes:
+    #- neutron-server
+    #modify_role: tripleo-modify-image
+    #modify_append_tag: "-prism-plugin2"
+    #modify_vars:
+    #  tasks_from: modify_image.yml
+    #  modify_dir_path: /home/stack/templates/neutron-server-custom
+  #- push_destination: true
+  #  includes:
+  #  - neutron-openvswitch-agent
+  #  modify_role: tripleo-modify-image
+  #  modify_append_tag: "-prism-plugin2"
+  #  modify_vars:
+  #    tasks_from: modify_image.yml
+  #    modify_dir_path: /home/stack/templates/neutron-agent-custom
+
